@@ -1,7 +1,6 @@
 <?php
  
 /*
- 
 Plugin Name: Xendit for GiveWP 
 Plugin URI: https://primavisiglobalindo.com/
 Description: Xendit payment gateway add-on for GiveWP Plugin.
@@ -10,8 +9,11 @@ Author: Regi Adi
 Author URI: https://github.com/regiadi
 License: GPLv2 or later
 Text Domain: Xendit
- 
 */
+
+require_once('vendor/autoload.php');
+
+use Xendit\Xendit;
 
 /**
  * Register payment method.
@@ -170,14 +172,6 @@ function xendit_for_give_process_xendit_donation( $posted_data ) {
 	// Any errors?
 	$errors = give_get_errors();
 
-    if (give_get_option('xendit_for_give_xendit_enable_test')) {
-        $test_mode = true;
-        $api_key = give_get_option('xendit_for_give_xendit_api_key_test');
-    } else {
-        $test_mode = false;
-        $api_key = give_get_option('xendit_for_give_xendit_api_key_live');
-    }
-
 	// No errors, proceed.
 	if ( ! $errors ) {
 
@@ -221,11 +215,9 @@ function xendit_for_give_process_xendit_donation( $posted_data ) {
 
 		// Do the actual payment processing using the custom payment gateway API. To access the GiveWP settings, use give_get_option() 
                 // as a reference, this pulls the API key entered above: give_get_option('insta_for_give_instamojo_api_key')
-        if ($test_mode) {
-            wp_redirect('https://checkout-staging.xendit.co/web/6073f5503e61af40326d7045?purchase_key=' . $donation_data['purchase_key'] . '&price=' . $donation_data['price']);
-        } else {
-            wp_redirect('https://invoice.xendit.co/od/bantuan-untuk-ntt?purchase_key=' . $donation_data['purchase_key'] . '&price=' . $donation_data['price']);
-        }
+        $invoice = xendit_for_give_create_invoice($donation_data);
+
+        wp_redirect($invoice['invoice_url']);
 	} else {
 
 		// Send user back to checkout.
@@ -234,3 +226,66 @@ function xendit_for_give_process_xendit_donation( $posted_data ) {
 }
 
 add_action( 'give_gateway_xendit', 'xendit_for_give_process_xendit_donation' );
+
+/**
+ * Create Xendit invoice.
+ *
+ * @param array $data List of user submitted data.
+ *
+ * @since  1.0.0
+ * @access public
+ *
+ * @return string
+ */
+function xendit_for_give_create_invoice($data) {
+    Xendit::setApiKey(xendit_for_give_get_api_key());
+
+    $params = [ 
+        'external_id' => $data['purchase_key'],
+        'payer_email' => $data['user_email'],
+        'description' => 'Pembayaran Donasi Lazismu - ' . $data['give_form_title'],
+        'amount' => $data['price'],
+        'should_send_email' => true,
+        'success_redirect_url' => give_get_success_page_uri()
+    ];
+
+    try {
+        $invoice = \Xendit\Invoice::create($params);
+    } catch (\Xendit\Exceptions\ApiException $e) {
+        return $this->sendError($e->getMessage());
+    }
+
+    return $invoice;
+}
+
+/**
+ * Get Xendit API Key based on environment.
+ *
+ * @since  1.0.0
+ * @access public
+ *
+ * @return string
+ */
+function xendit_for_give_get_api_key() {
+    if (xendit_for_give_is_test_mode()) {
+        return give_get_option('xendit_for_give_xendit_api_key_test');
+    } else {
+        return give_get_option('xendit_for_give_xendit_api_key_live');
+    }
+}
+
+/**
+ * Check Xendit test mode state.
+ *
+ * @since  1.0.0
+ * @access public
+ *
+ * @return bool
+ */
+function xendit_for_give_is_test_mode() {
+    if (give_get_option('xendit_for_give_xendit_enable_test')) {
+        return true;
+    } else {
+        return false;
+    }
+}
