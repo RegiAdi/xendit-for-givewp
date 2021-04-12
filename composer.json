@@ -1,0 +1,5 @@
+{
+    "require": {
+        "xendit/xendit-php": "^2.10"
+    }
+}

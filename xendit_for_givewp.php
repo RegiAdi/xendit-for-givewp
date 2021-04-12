@@ -75,9 +75,23 @@ function xendit_for_give_register_payment_gateway_setting_fields( $settings ) {
 			);
 
             $settings[] = array(
-				'name' => __( 'API Key', 'give-square' ),
-				'desc' => __( 'Enter your API Key, found in your Instamojo Dashboard.', 'xendit-for-give' ),
-				'id'   => 'xendit_for_give_xendit_api_key',
+				'name' => __( 'Enable Test Mode', 'give-xendit-enable-test' ),
+				'desc' => __( 'Enable Xendit Test Environment.', 'xendit-for-give' ),
+				'id'   => 'xendit_for_give_xendit_enable_test',
+				'type' => 'checkbox',
+		    );
+
+            $settings[] = array(
+				'name' => __( 'Test Mode API Key', 'give-xendit-api-key-test' ),
+				'desc' => __( 'Enter your Xendit Test API Key.', 'xendit-for-give' ),
+				'id'   => 'xendit_for_give_xendit_api_key_test',
+				'type' => 'text',
+		    );
+
+            $settings[] = array(
+				'name' => __( 'Live Mode API Key', 'give-xendit-api-key-live' ),
+				'desc' => __( 'Enter your Xendit Live API Key.', 'xendit-for-give' ),
+				'id'   => 'xendit_for_give_xendit_api_key_live',
 				'type' => 'text',
 		    );
 
@@ -96,7 +110,7 @@ function xendit_for_give_register_payment_gateway_setting_fields( $settings ) {
 add_filter( 'give_get_settings_gateways', 'xendit_for_give_register_payment_gateway_setting_fields' );
 
 /**
- * Toggle PayPal CC Billing Detail Fieldset.
+ * Toggle Xendit CC Billing Detail Fieldset.
  *
  * @param int $form_id Form ID.
  *
@@ -156,6 +170,14 @@ function xendit_for_give_process_xendit_donation( $posted_data ) {
 	// Any errors?
 	$errors = give_get_errors();
 
+    if (give_get_option('xendit_for_give_xendit_enable_test')) {
+        $test_mode = true;
+        $api_key = give_get_option('xendit_for_give_xendit_api_key_test');
+    } else {
+        $test_mode = false;
+        $api_key = give_get_option('xendit_for_give_xendit_api_key_live');
+    }
+
 	// No errors, proceed.
 	if ( ! $errors ) {
 
@@ -199,7 +221,11 @@ function xendit_for_give_process_xendit_donation( $posted_data ) {
 
 		// Do the actual payment processing using the custom payment gateway API. To access the GiveWP settings, use give_get_option() 
                 // as a reference, this pulls the API key entered above: give_get_option('insta_for_give_instamojo_api_key')
-        wp_redirect('https://invoice.xendit.co/od/bantuan-untuk-ntt?purchase_key=' . $donation_data['purchase_key'] . '&price=' . $donation_data['price']);
+        if ($test_mode) {
+            wp_redirect('https://checkout-staging.xendit.co/web/6073f5503e61af40326d7045?purchase_key=' . $donation_data['purchase_key'] . '&price=' . $donation_data['price']);
+        } else {
+            wp_redirect('https://invoice.xendit.co/od/bantuan-untuk-ntt?purchase_key=' . $donation_data['purchase_key'] . '&price=' . $donation_data['price']);
+        }
 	} else {
 
 		// Send user back to checkout.
