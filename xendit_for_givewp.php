@@ -2,7 +2,7 @@
  
 /*
 Plugin Name: Xendit for GiveWP 
-Plugin URI: https://primavisiglobalindo.com/
+Plugin URI: https://github.com/RegiAdi/xendit-for-givewp
 Description: Xendit payment gateway add-on for GiveWP Plugin.
 Version: 1.0
 Author: Regi Adi
@@ -24,6 +24,34 @@ use Xendit\Xendit;
  *
  * @return array
  */
+
+add_action( 'init', 'xendit_for_give_listen');
+
+/**
+ * Listen for Xendit events.
+ *
+ * @access public
+ * @since  2.5.0
+ *
+ * @return void
+ */
+function xendit_for_give_listen() {
+    // Must be a stripe listener to proceed.
+    if ( ! isset( $give_listener ) || 'xendit' !== $give_listener ) {
+        return;
+    }
+
+    // Retrieve the request's body and parse it as JSON.
+    $body  = @file_get_contents( 'php://input' );
+    $event = json_decode( $body );
+
+    var_dump($event);
+
+    $message = 'Success';
+
+    status_header( 200 );
+    exit( $message );
+}
 
 function xendit_for_give_register_payment_method( $gateways ) {
   // Duplicate this section to add support for multiple payment method from a custom payment gateway.
