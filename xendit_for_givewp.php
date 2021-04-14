@@ -16,6 +16,27 @@ require_once('vendor/autoload.php');
 use Xendit\Xendit;
 
 /**
+ * Listen for Xendit events.
+ *
+ * @access public
+ * @since  2.5.0
+ *
+ * @return void
+ */
+function xendit_for_give_process_success_payment() {
+	if ( isset( $_GET['give-listener'] ) && 'xendit-success' === $_GET['give-listener'] ) {
+        if (isset($_GET['donation-id']) && isset($_GET['success-page-uri'])) {
+            $donation_id = $_GET['donation-id'];
+
+			// Update payment status to donation.
+			give_update_payment_status( $donation_id, 'publish' );
+        }
+    }
+}
+
+add_action( 'init', 'xendit_for_give_process_success_payment');
+
+/**
  * Register payment method.
  *
  * @since 1.0.0
@@ -24,35 +45,6 @@ use Xendit\Xendit;
  *
  * @return array
  */
-
-add_action( 'init', 'xendit_for_give_listen');
-
-/**
- * Listen for Xendit events.
- *
- * @access public
- * @since  2.5.0
- *
- * @return void
- */
-function xendit_for_give_listen() {
-    // Must be a stripe listener to proceed.
-    if ( ! isset( $give_listener ) || 'xendit' !== $give_listener ) {
-        return;
-    }
-
-    // Retrieve the request's body and parse it as JSON.
-    $body  = @file_get_contents( 'php://input' );
-    $event = json_decode( $body );
-
-    var_dump($event);
-
-    $message = 'Success';
-
-    status_header( 200 );
-    exit( $message );
-}
-
 function xendit_for_give_register_payment_method( $gateways ) {
   // Duplicate this section to add support for multiple payment method from a custom payment gateway.
   $gateways['xendit'] = array(
@@ -76,7 +68,6 @@ add_filter( 'give_payment_gateways', 'xendit_for_give_register_payment_method' )
  */
 
 function xendit_for_give_register_payment_gateway_sections( $sections ) {
-	
 	// `xendit-settings` is the name/slug of the payment gateway section.
 	$sections['xendit-settings'] = __( 'Xendit', 'xendit-for-give' );
 
@@ -148,17 +139,6 @@ add_filter( 'give_get_settings_gateways', 'xendit_for_give_register_payment_gate
  * @since 1.8.5
  */
 function xendit_for_give_standard_billing_fields( $form_id ) {
-
-	// if ( give_is_setting_enabled( give_get_option( 'paypal_standard_billing_details' ) ) ) {
-	// 	give_default_cc_address_fields( $form_id );
-
-	// 	return true;
-	// }
-
-	// if ( FormUtils::isLegacyForm( $form_id ) ) {
-	// 	return false;
-	// }
-
 	printf(
 		'
 		<fieldset class="no-fields">
@@ -178,7 +158,6 @@ function xendit_for_give_standard_billing_fields( $form_id ) {
 	);
 
 	return true;
-
 }
 
 add_action( 'give_xendit_cc_form', 'xendit_for_give_standard_billing_fields' );
@@ -245,9 +224,12 @@ function xendit_for_give_process_xendit_donation( $posted_data ) {
                 // as a reference, this pulls the API key entered above: give_get_option('insta_for_give_instamojo_api_key')
         $invoice = xendit_for_give_create_invoice($donation_data);
 
+        if (empty($invoice)) {
+            give_send_back_to_checkout( '?payment-mode=xendit' );
+        }
+
         wp_redirect($invoice['invoice_url']);
 	} else {
-
 		// Send user back to checkout.
 		give_send_back_to_checkout( '?payment-mode=xendit' );
 	} // End if().
@@ -268,19 +250,22 @@ add_action( 'give_gateway_xendit', 'xendit_for_give_process_xendit_donation' );
 function xendit_for_give_create_invoice($data) {
     Xendit::setApiKey(xendit_for_give_get_api_key());
 
+    $donation_id = give_insert_payment($data);
+
     $params = [ 
         'external_id' => $data['purchase_key'],
         'payer_email' => $data['user_email'],
         'description' => 'Pembayaran Donasi Lazismu - ' . $data['give_form_title'],
         'amount' => $data['price'],
         'should_send_email' => true,
-        'success_redirect_url' => give_get_success_page_uri()
+        // 'success_redirect_url' => get_site_url() . '/?give-listener=xendit-success&donation-id=' . $donation_id . '&success-page-uri=' . give_get_success_page_uri()
+        'success_redirect_url' => give_get_success_page_uri() . '&give-listener=xendit-success&donation-id=' . $donation_id . '&success-page-uri=' . give_get_success_page_uri()
     ];
 
     try {
         $invoice = \Xendit\Invoice::create($params);
     } catch (\Xendit\Exceptions\ApiException $e) {
-        return $this->sendError($e->getMessage());
+        return null;
     }
 
     return $invoice;
